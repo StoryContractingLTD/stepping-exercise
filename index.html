@@ -4,12 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stepping Exercise</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="demo" class="demo hidden">Demo mode: Firebase is not set up yet, so this only works between tabs on one computer.</div>
 <div class="phone">
   <h1>Stepping Exercise</h1>
+  <div class="stripe"></div>
 
   <div id="join" class="card hidden">
     <div id="codeRow" class="hidden">
@@ -96,27 +98,31 @@ function render() {
   const round = state && state.round, live = state && state.live;
   show("play", !!live);
   show("wait", !live);
-  show("mini", !!round);
+  const wheel = round === 3;
+  show("mini", !!round && !wheel);
 
   if (!live) {
-    $("wait").textContent = round
+    $("wait").textContent = wheel
+      ? "Look up at the main screen to see where everyone has landed."
+      : round
       ? "That round is finished. Look up at the main screen."
       : "You're in. Watch the main screen, we'll start shortly.";
   } else {
     const items = roundItems(round), it = items[state.idx], key = round + "_" + state.idx;
     $("progress").textContent = "Statement " + (state.idx + 1) + " of " + items.length;
-    $("pref").textContent = it.side.name;
+    $("pref").textContent = "";
     $("prompt").textContent = it.side.prompt;
     $("statement").textContent = it.text;
     $("yes").textContent = "That's me: " + it.side.step.toLowerCase();
     $("yes").classList.toggle("chosen", answers[key] === 1);
     $("no").classList.toggle("chosen", answers[key] === 0);
   }
-  if (round) {
+  if (round && !wheel) {
     const R = ROUNDS[round], pos = positionOf({ a: answers }, round);
     $("me").style.left = ((pos + 9) / 18 * 100) + "%";
-    $("endA").textContent = R.a.name;
-    $("endB").textContent = R.b.name;
+    // Preference names only appear once the round is finished.
+    $("endA").textContent = live ? "" : R.a.name;
+    $("endB").textContent = live ? "" : R.b.name;
   }
 }
 

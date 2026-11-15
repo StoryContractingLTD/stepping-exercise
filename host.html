@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stepping Exercise: Facilitator</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,6 +17,7 @@
       <img id="qrSmall" alt="QR code to join">
     </div>
   </header>
+  <div class="stripe"></div>
 
   <div class="stage">
     <div id="lobby" class="lobby hidden">
@@ -34,23 +36,50 @@
 
       <div id="lineH" class="lineH hidden">
         <div class="bins" id="binsH"></div>
-        <div class="axis"><span>&larr; Introversion</span><span>Extraversion &rarr;</span></div>
+        <div class="axis"><span id="axA"></span><span id="axB"></span></div>
       </div>
       <div id="lineV" class="lineV hidden">
         <div class="labels">
-          <div>&uarr; Thinking<small>front of the room</small></div>
-          <div>&darr; Feeling<small>back of the room</small></div>
+          <div id="labA"></div>
+          <div id="labB"></div>
         </div>
         <div class="bins" id="binsV"></div>
       </div>
+    </div>
+
+    <div id="wheelView" class="wheelWrap hidden">
+      <span></span><div class="lab">Thinking</div><span></span>
+      <div class="lab l">Introversion</div>
+      <div class="wheel" id="wheel">
+        <svg viewBox="0 0 1000 1000" aria-hidden="true">
+          <defs>
+            <path id="arcTL" d="M 57 490 A 443 443 0 0 1 490 57"/>
+            <path id="arcTR" d="M 510 57 A 443 443 0 0 1 943 490"/>
+            <path id="arcBL" d="M 26 510 A 474 474 0 0 0 490 974"/>
+            <path id="arcBR" d="M 510 974 A 474 474 0 0 0 974 510"/>
+          </defs>
+          <path fill="#0071bb" d="M 494 494 L 494 2 A 498 498 0 0 0 2 494 Z"/>
+          <path fill="#b83133" d="M 506 494 L 998 494 A 498 498 0 0 0 506 2 Z"/>
+          <path fill="#8ba40f" d="M 494 506 L 2 506 A 498 498 0 0 0 494 998 Z"/>
+          <path fill="#fcc650" d="M 506 506 L 506 998 A 498 498 0 0 0 998 506 Z"/>
+          <circle cx="500" cy="500" r="408" fill="none" stroke="#fff" stroke-width="6"/>
+          <text text-anchor="middle"><textPath href="#arcTL" startOffset="50%">COOL BLUE</textPath></text>
+          <text text-anchor="middle"><textPath href="#arcTR" startOffset="50%">FIERY RED</textPath></text>
+          <text text-anchor="middle"><textPath href="#arcBL" startOffset="50%">EARTH GREEN</textPath></text>
+          <text text-anchor="middle"><textPath href="#arcBR" startOffset="50%">SUNSHINE YELLOW</textPath></text>
+        </svg>
+      </div>
+      <div class="lab r">Extraversion</div>
+      <span></span><div class="lab">Feeling</div><span></span>
     </div>
   </div>
 
   <div class="controls">
     <button id="back" class="ghost">&larr; Back</button>
     <button id="next" class="primary">Next &rarr;</button>
-    <button id="start1" class="primary">Start Introversion / Extraversion</button>
-    <button id="start2" class="primary">Start Thinking / Feeling</button>
+    <button id="start1" class="primary">Start round 1</button>
+    <button id="start2" class="primary">Start round 2</button>
+    <button id="showWheel" class="primary">Show colour wheel</button>
     <button id="toLobby" class="ghost">Show join screen</button>
     <label><input type="checkbox" id="names" checked> Show names</label>
     <span class="spacer"></span>
@@ -106,6 +135,8 @@ Store.on(base + "/players", p => { players = p || {}; render(); });
 function startRound(r) { setState({ round: r, idx: 0, live: true }); }
 $("start1").onclick = () => startRound(1);
 $("start2").onclick = () => startRound(2);
+$("showWheel").onclick = () => setState({ round: 3, idx: 0, live: false });
+window.addEventListener("resize", () => render());
 $("toLobby").onclick = () => setState({ round: 0, idx: 0, live: false });
 $("next").onclick = next;
 $("back").onclick = back;
@@ -123,7 +154,7 @@ function next() {
   else setState({ round: state.round, idx: last, live: false });
 }
 function back() {
-  if (!state.round) return;
+  if (!state.round || state.round === 3) return;
   if (!state.live) setState({ round: state.round, idx: state.idx, live: true });
   else if (state.idx > 0) setState({ round: state.round, idx: state.idx - 1, live: true });
 }
@@ -137,20 +168,28 @@ function render() {
   const round = state.round, live = state.live;
   $("countBig").textContent = $("countSmall").textContent = list.length;
 
+  const wheel = round === 3;
   show("lobby", !round);
-  show("round", !!round);
+  show("round", !!round && !wheel);
+  show("wheelView", wheel);
   show("smallJoin", !!round);
-  show("back", !!round);
+  show("back", !!round && !wheel);
   show("next", !!live);
   show("start1", !live);
   show("start2", !live);
+  show("showWheel", !live && !wheel);
   show("toLobby", !!round && !live);
-  $("title").textContent = round ? "Stepping Exercise: " + ROUNDS[round].title : "Stepping Exercise";
-  if (!round) return;
+  const names = $("names").checked;
+  const label = (p, max) => names ? (p.name.length > max ? p.name.slice(0, max - 1) + "…" : p.name) : "";
+  if (!round) { $("title").textContent = "Stepping Exercise"; return; }
+  if (wheel) { $("title").textContent = "Stepping Exercise: where we all landed"; drawWheel(list, label); return; }
 
+  // The preference names stay hidden until the round is finished.
+  const R = ROUNDS[round];
+  $("title").textContent = "Stepping Exercise: " + (live ? "Round " + round : R.title);
   const items = roundItems(round), it = items[state.idx];
   if (live) {
-    $("pref").textContent = it.side.name;
+    $("pref").textContent = "";
     $("prompt").textContent = it.side.prompt;
     $("statement").textContent = it.text;
     $("progress").textContent = "Statement " + (state.idx + 1) + " of " + items.length;
@@ -158,25 +197,53 @@ function render() {
     $("answered").textContent = done + " of " + list.length + " answered";
     $("next").textContent = state.idx === items.length - 1 ? "Finish round" : "Next →";
   } else {
-    $("pref").textContent = "Round complete";
+    $("pref").textContent = "Round complete: " + R.title;
     $("prompt").textContent = "";
     $("statement").textContent = "Take a look at where everyone has ended up.";
     $("progress").textContent = "";
     $("answered").textContent = list.length + " people";
   }
+  $("axA").textContent = "← " + (live ? "Left" : R.a.name);
+  $("axB").textContent = (live ? "Right" : R.b.name) + " →";
+  $("labA").textContent = "↑ " + (live ? "Front of the room" : R.a.name);
+  $("labB").textContent = "↓ " + (live ? "Back of the room" : R.b.name);
 
   show("lineH", round === 1);
   show("lineV", round === 2);
   const bins = $(round === 1 ? "binsH" : "binsV").children;
   for (const b of bins) b.textContent = "";
-  const names = $("names").checked;
   list.forEach(p => {
     const d = document.createElement("div");
     d.className = "dot";
-    d.textContent = names ? (p.name.length > 9 ? p.name.slice(0, 8) + "\u2026" : p.name) : "";
+    d.textContent = label(p, round === 1 ? 9 : 12);
     d.title = p.name;
     bins[positionOf(p, round) + 9].appendChild(d);
   });
+}
+
+// Both rounds combined: left/right from round 1, up/down from round 2.
+function drawWheel(list, label) {
+  const w = $("wheel");
+  w.querySelectorAll(".dot").forEach(d => d.remove());
+  const size = w.clientWidth, reach = size * 0.37;
+  const pts = list.map(p => {
+    const d = document.createElement("div");
+    d.className = "dot";
+    d.textContent = label(p, 12);
+    d.title = p.name;
+    w.appendChild(d);
+    const nx = positionOf(p, 1) / 9, ny = positionOf(p, 2) / 9;
+    return { d, x: size / 2 + nx * Math.sqrt(1 - ny * ny / 2) * reach, y: size / 2 + ny * Math.sqrt(1 - nx * nx / 2) * reach, w: d.offsetWidth, h: d.offsetHeight };
+  });
+  // Nudge overlapping names apart so everyone can be read.
+  for (let n = 0; n < 80; n++) {
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+      const a = pts[i], b = pts[j];
+      const ox = (a.w + b.w) / 2 + 2 - Math.abs(a.x - b.x), oy = (a.h + b.h) / 2 + 2 - Math.abs(a.y - b.y);
+      if (ox > 0 && oy > 0) { const s = a.y <= b.y ? 1 : -1; a.y -= s * oy / 2; b.y += s * oy / 2; }
+    }
+  }
+  pts.forEach(p => { p.d.style.left = p.x + "px"; p.d.style.top = p.y + "px"; });
 }
 render();
 </script>
