@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stepping Exercise</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="demo" class="demo hidden">Demo mode: Firebase is not set up yet, so this only works between tabs on one computer.</div>
+<div class="phone">
+  <h1>Stepping Exercise</h1>
+
+  <div id="join" class="card hidden">
+    <div id="codeRow" class="hidden">
+      <label for="code">Session code (shown on the main screen)</label>
+      <input id="code" maxlength="4" autocapitalize="characters" autocomplete="off">
+    </div>
+    <label for="name">Your first name</label>
+    <input id="name" maxlength="20" autocomplete="given-name">
+    <button id="joinBtn" class="primary" style="width:100%">Join</button>
+  </div>
+
+  <div id="wait" class="card big hidden"></div>
+
+  <div id="play" class="card hidden">
+    <div class="progress" id="progress"></div>
+    <p class="pref" id="pref"></p>
+    <p class="prompt" id="prompt"></p>
+    <p class="statement" id="statement"></p>
+    <div class="choices">
+      <button id="yes" class="primary"></button>
+      <button id="no" class="ghost">Not me, stay put</button>
+    </div>
+  </div>
+
+  <div id="mini" class="mini hidden">
+    <div class="track"><div class="me" id="me"></div></div>
+    <div class="ends"><span id="endA"></span><span>Your position</span><span id="endB"></span></div>
+  </div>
+
+  <div style="flex:1"></div>
+  <div class="copy">Statements &copy; The Insights Group Ltd, 2013-2014. All rights reserved.</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="statements.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const show = (id, on) => $(id).classList.toggle("hidden", !on);
+if (!Store.live) show("demo", true);
+
+let code = (new URLSearchParams(location.search).get("s") || "").toUpperCase();
+let pid = null, answers = {}, state = null, joined = false;
+
+function load() {
+  pid = localStorage.getItem("step-pid-" + code);
+  try { answers = JSON.parse(localStorage.getItem("step-ans-" + code)) || {}; } catch (e) { answers = {}; }
+  const name = localStorage.getItem("step-name-" + code);
+  if (pid && name) start(name);
+}
+
+function start(name) {
+  if (!pid) { pid = "p" + Math.random().toString(36).slice(2, 10); localStorage.setItem("step-pid-" + code, pid); }
+  localStorage.setItem("step-name-" + code, name);
+  Store.set("sessions/" + code + "/players/" + pid + "/name", name);
+  joined = true;
+  Store.on("sessions/" + code + "/state", s => { state = s; render(); });
+}
+
+$("joinBtn").onclick = () => {
+  if (!code) code = $("code").value.trim().toUpperCase();
+  const name = $("name").value.trim();
+  if (code.length !== 4 || !name) return;
+  start(name);
+};
+
+function answer(val) {
+  const key = state.round + "_" + state.idx;
+  answers[key] = val;
+  localStorage.setItem("step-ans-" + code, JSON.stringify(answers));
+  Store.set("sessions/" + code + "/players/" + pid + "/a/" + key, val);
+  render();
+}
+$("yes").onclick = () => answer(1);
+$("no").onclick = () => answer(0);
+
+function render() {
+  show("join", !joined);
+  show("codeRow", !joined && !new URLSearchParams(location.search).get("s"));
+  if (!joined) { show("wait", false); show("play", false); show("mini", false); return; }
+
+  const round = state && state.round, live = state && state.live;
+  show("play", !!live);
+  show("wait", !live);
+  show("mini", !!round);
+
+  if (!live) {
+    $("wait").textContent = round
+      ? "That round is finished. Look up at the main screen."
+      : "You're in. Watch the main screen, we'll start shortly.";
+  } else {
+    const items = roundItems(round), it = items[state.idx], key = round + "_" + state.idx;
+    $("progress").textContent = "Statement " + (state.idx + 1) + " of " + items.length;
+    $("pref").textContent = it.side.name;
+    $("prompt").textContent = it.side.prompt;
+    $("statement").textContent = it.text;
+    $("yes").textContent = "That's me: " + it.side.step.toLowerCase();
+    $("yes").classList.toggle("chosen", answers[key] === 1);
+    $("no").classList.toggle("chosen", answers[key] === 0);
+  }
+  if (round) {
+    const R = ROUNDS[round], pos = positionOf({ a: answers }, round);
+    $("me").style.left = ((pos + 9) / 18 * 100) + "%";
+    $("endA").textContent = R.a.name;
+    $("endB").textContent = R.b.name;
+  }
+}
+
+if (code) load();
+render();
+</script>
+</body>
+</html>

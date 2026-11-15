@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stepping Exercise: Facilitator</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="demo" class="demo hidden">Demo mode: Firebase is not set up yet, so phones cannot join. It only works between tabs on this computer.</div>
+<div class="host">
+  <header>
+    <h1 id="title">Stepping Exercise</h1>
+    <div class="join" id="smallJoin">
+      <div>Join: scan the code<br>Session <b id="codeSmall"></b> &middot; <span id="countSmall">0</span> joined</div>
+      <img id="qrSmall" alt="QR code to join">
+    </div>
+  </header>
+
+  <div class="stage">
+    <div id="lobby" class="lobby hidden">
+      <img id="qrBig" alt="QR code to join">
+      <div class="url" id="url"></div>
+      <div>Scan the code with your phone camera. <b><span id="countBig">0</span> joined</b></div>
+    </div>
+
+    <div id="round" class="hidden">
+      <div class="statementBox">
+        <p class="pref" id="pref"></p>
+        <p class="prompt" id="prompt"></p>
+        <p class="statement" id="statement"></p>
+      </div>
+      <div class="meta"><span id="progress"></span><span id="answered"></span></div>
+
+      <div id="lineH" class="lineH hidden">
+        <div class="bins" id="binsH"></div>
+        <div class="axis"><span>&larr; Introversion</span><span>Extraversion &rarr;</span></div>
+      </div>
+      <div id="lineV" class="lineV hidden">
+        <div class="labels">
+          <div>&uarr; Thinking<small>front of the room</small></div>
+          <div>&darr; Feeling<small>back of the room</small></div>
+        </div>
+        <div class="bins" id="binsV"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="back" class="ghost">&larr; Back</button>
+    <button id="next" class="primary">Next &rarr;</button>
+    <button id="start1" class="primary">Start Introversion / Extraversion</button>
+    <button id="start2" class="primary">Start Thinking / Feeling</button>
+    <button id="toLobby" class="ghost">Show join screen</button>
+    <label><input type="checkbox" id="names" checked> Show names</label>
+    <span class="spacer"></span>
+    <button id="reset" class="ghost">New session</button>
+  </div>
+  <div class="copy">Statements &copy; The Insights Group Ltd, 2013-2014. All rights reserved.</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script src="statements.js"></script>
+<script src="qrcode.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const show = (id, on) => $(id).classList.toggle("hidden", !on);
+if (!Store.live) show("demo", true);
+
+function newCode() {
+  const L = "ABCDEFGHJKMNPQRSTUVWXYZ";
+  let c = ""; for (let i = 0; i < 4; i++) c += L[Math.floor(Math.random() * L.length)];
+  return c;
+}
+let code = localStorage.getItem("step-host-code");
+let fresh = false;
+if (!code) { code = newCode(); localStorage.setItem("step-host-code", code); fresh = true; }
+
+let state = { round: 0, idx: 0, live: false };
+let players = {};
+const base = "sessions/" + code;
+const setState = s => Store.set(base + "/state", s);
+
+// Join link and QR codes
+const joinUrl = new URL("index.html?s=" + code, location.href).href;
+const qr = qrcode(0, "M"); qr.addData(joinUrl); qr.make();
+$("qrBig").src = $("qrSmall").src = qr.createDataURL(8, 2);
+$("url").textContent = joinUrl.replace(/^https?:\/\//, "");
+$("codeSmall").textContent = code;
+
+for (let i = 0; i < 19; i++) {
+  ["binsH", "binsV"].forEach(id => {
+    const b = document.createElement("div");
+    b.className = "bin" + (i === 9 ? " mid" : "");
+    $(id).appendChild(b);
+  });
+}
+
+if (fresh) setState(state);
+Store.on(base + "/state", s => { if (s) state = s; render(); });
+Store.on(base + "/players", p => { players = p || {}; render(); });
+
+function startRound(r) { setState({ round: r, idx: 0, live: true }); }
+$("start1").onclick = () => startRound(1);
+$("start2").onclick = () => startRound(2);
+$("toLobby").onclick = () => setState({ round: 0, idx: 0, live: false });
+$("next").onclick = next;
+$("back").onclick = back;
+$("names").onchange = render;
+$("reset").onclick = () => {
+  if (!confirm("Start a new session? Everyone will need to scan a new code.")) return;
+  localStorage.removeItem("step-host-code");
+  location.reload();
+};
+
+function next() {
+  if (!state.live) return;
+  const last = roundItems(state.round).length - 1;
+  if (state.idx < last) setState({ round: state.round, idx: state.idx + 1, live: true });
+  else setState({ round: state.round, idx: last, live: false });
+}
+function back() {
+  if (!state.round) return;
+  if (!state.live) setState({ round: state.round, idx: state.idx, live: true });
+  else if (state.idx > 0) setState({ round: state.round, idx: state.idx - 1, live: true });
+}
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); next(); }
+  if (e.key === "ArrowLeft") back();
+});
+
+function render() {
+  const list = Object.values(players).filter(p => p && p.name);
+  const round = state.round, live = state.live;
+  $("countBig").textContent = $("countSmall").textContent = list.length;
+
+  show("lobby", !round);
+  show("round", !!round);
+  show("smallJoin", !!round);
+  show("back", !!round);
+  show("next", !!live);
+  show("start1", !live);
+  show("start2", !live);
+  show("toLobby", !!round && !live);
+  $("title").textContent = round ? "Stepping Exercise: " + ROUNDS[round].title : "Stepping Exercise";
+  if (!round) return;
+
+  const items = roundItems(round), it = items[state.idx];
+  if (live) {
+    $("pref").textContent = it.side.name;
+    $("prompt").textContent = it.side.prompt;
+    $("statement").textContent = it.text;
+    $("progress").textContent = "Statement " + (state.idx + 1) + " of " + items.length;
+    const done = list.filter(p => p.a && p.a[round + "_" + state.idx] !== undefined).length;
+    $("answered").textContent = done + " of " + list.length + " answered";
+    $("next").textContent = state.idx === items.length - 1 ? "Finish round" : "Next →";
+  } else {
+    $("pref").textContent = "Round complete";
+    $("prompt").textContent = "";
+    $("statement").textContent = "Take a look at where everyone has ended up.";
+    $("progress").textContent = "";
+    $("answered").textContent = list.length + " people";
+  }
+
+  show("lineH", round === 1);
+  show("lineV", round === 2);
+  const bins = $(round === 1 ? "binsH" : "binsV").children;
+  for (const b of bins) b.textContent = "";
+  const names = $("names").checked;
+  list.forEach(p => {
+    const d = document.createElement("div");
+    d.className = "dot";
+    d.textContent = names ? (p.name.length > 9 ? p.name.slice(0, 8) + "\u2026" : p.name) : "";
+    d.title = p.name;
+    bins[positionOf(p, round) + 9].appendChild(d);
+  });
+}
+render();
+</script>
+</body>
+</html>
